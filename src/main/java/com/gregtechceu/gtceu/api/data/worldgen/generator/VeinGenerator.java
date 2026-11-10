@@ -19,6 +19,7 @@ import com.mojang.serialization.MapCodec;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ObjectIntPair;
 import org.jetbrains.annotations.Nullable;
 
@@ -65,15 +66,15 @@ public abstract class VeinGenerator {
     }
 
     /**
-     * Generate a map of all ore placers (by block position), for each block in this ore vein.
+     * Generate a map of all ore placers (by section), for each section this ore vein should be placed in.
      *
      * <p>
      * Note that, if in any way possible, this is NOT supposed to directly place any of the vein's blocks, as their
      * respective ore placers are invoked at a later time, when the chunk containing them is actually generated.
      */
     @HideFromJS
-    public abstract Map<BlockPos, OreBlockPlacer> generate(WorldGenLevel level, RandomSource random,
-                                                           GTOreDefinition entry, BlockPos origin);
+    public abstract Long2ObjectMap<OreBlockPlacer> generate(WorldGenLevel level, RandomSource random,
+                                                            GTOreDefinition entry, BlockPos origin);
 
     @HideFromJS
     public abstract VeinGenerator build();

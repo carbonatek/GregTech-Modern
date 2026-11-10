@@ -18,31 +18,27 @@ public class OreVeinUtil {
 
     private OreVeinUtil() {}
 
-    public static boolean canPlaceOre(BlockState pState, Function<BlockPos, BlockState> pAdjacentStateAccessor,
-                                      RandomSource pRandom, GTOreDefinition entry,
-                                      OreConfiguration.TargetBlockState pTargetState,
-                                      BlockPos pMatablePos) {
-        if (!pTargetState.target.test(pState, pRandom))
-            return false;
-        if (shouldSkipAirCheck(pRandom, entry.discardChanceOnAirExposure()))
-            return true;
+    public static boolean canPlaceOre(BlockState state, Function<BlockPos, BlockState> adjacentStateAccessor,
+                                      RandomSource random, GTOreDefinition entry,
+                                      OreConfiguration.TargetBlockState targetState, BlockPos pos) {
+        if (!targetState.target.test(state, random)) return false;
+        if (shouldSkipAirCheck(random, entry.discardChanceOnAirExposure())) return true;
 
-        return !Feature.isAdjacentToAir(pAdjacentStateAccessor, pMatablePos);
+        return !Feature.isAdjacentToAir(adjacentStateAccessor, pos);
     }
 
-    public static boolean canPlaceOre(BlockState pState, Function<BlockPos, BlockState> pAdjacentStateAccessor,
-                                      RandomSource pRandom, GTOreDefinition entry,
-                                      BlockPos pMatablePos) {
-        if (!entry.layer().getTarget().test(pState, pRandom))
-            return false;
-        if (shouldSkipAirCheck(pRandom, entry.discardChanceOnAirExposure()))
-            return true;
+    public static boolean canPlaceOre(BlockState state, Function<BlockPos, BlockState> adjacentStateAccessor,
+                                      RandomSource random, GTOreDefinition entry, BlockPos pos) {
+        if (!entry.layer().getTarget().test(state, random)) return false;
+        if (shouldSkipAirCheck(random, entry.discardChanceOnAirExposure())) return true;
 
-        return !Feature.isAdjacentToAir(pAdjacentStateAccessor, pMatablePos);
+        return !Feature.isAdjacentToAir(adjacentStateAccessor, pos);
     }
 
-    protected static boolean shouldSkipAirCheck(RandomSource pRandom, float pChance) {
-        return pChance <= 0 || (!(pChance >= 1) && pRandom.nextFloat() >= pChance);
+    protected static boolean shouldSkipAirCheck(RandomSource random, float chance) {
+        if (chance <= 0.0f) return true;
+        if (chance >= 1.0f) return false;
+        return random.nextFloat() >= chance;
     }
 
     /**
