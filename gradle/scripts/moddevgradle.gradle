@@ -159,6 +159,10 @@ neoForge {
             // Enable assertions for our classes in dev environment
             jvmArgument('-ea:com.gregtechceu.gtceu...')
 
+            // enable vein placement logging
+            // All GT markers are in the {@link com.gregtechceu.gtceu.utils.logging.LogMarkers} class.
+            systemProperty 'gtceu.logging.markers.veindebug', 'ACCEPT'
+
             // jvmArgument("-XX:+AllowEnhancedClassRedefinition")
             jvmArgument("-XX:+AllowRedefinitionToAddDeleteMethods")
 

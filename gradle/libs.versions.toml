@@ -11,6 +11,8 @@ jetbrains-annotations = "26.0.1"
 renderNurse = "0.0.14"
 evalEx = "3.6.0"
 
+log4j = "2.19.0"
+
 [libraries]
 minecraft               = { module = "com.mojang:minecraft", version.ref = "minecraft" }
 neoForge                = { module = "net.neoforged:neoforge", version.ref = "neoForge" }

@@ -1,5 +1,7 @@
 package com.gregtechceu.gtceu.api.data.worldgen.ores;
 
+import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.chunk.BulkSectionAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
@@ -16,5 +18,6 @@ public interface OreBlockPlacer {
     /**
      * Place blocks at the (precomputed) location this placer is mapped to.
      */
-    void placeBlocks(BulkSectionAccess access, LevelChunkSection section);
+    void placeSectionBlocks(WorldGenLevel worldGenLevel, BulkSectionAccess access,
+                            LevelChunkSection section, SectionPos sectionPos);
 }

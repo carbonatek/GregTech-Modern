@@ -1051,10 +1051,6 @@ public class ConfigHolder {
                 "Default: false" })
         public boolean debug = false;
         @Configurable
-        @Configurable.Comment({ "Debug ore vein placement? (will print placed veins to server's debug.log)",
-                "Default: false (no placement printout in debug.log)" })
-        public boolean debugWorldgen = false;
-        @Configurable
         @Configurable.Comment({ "Generate ores in superflat worlds?", "Default: false" })
         public boolean doSuperflatOres = false;
         @Configurable

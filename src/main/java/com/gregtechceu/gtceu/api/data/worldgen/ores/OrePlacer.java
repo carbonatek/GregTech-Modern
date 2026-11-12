@@ -64,13 +64,14 @@ public class OrePlacer {
         LevelChunkSection section = getSection(level, access, sectionPos);
         if (section == null) return;
 
+        // TODO readd this check
         RuleTest layerTarget = targetOverride != null ? targetOverride : generatedVein.getLayer().getTarget();
 
         OreBlockPlacer placer = generatedVein.consumeOres(sectionPos);
         if (placer == null) return;
 
         // if (layerTarget.test(blockState, random)) {
-        placer.placeBlocks(access, section);
+        placer.placeSectionBlocks(level, access, section, SectionPos.of(sectionPos));
         // }
     }
 

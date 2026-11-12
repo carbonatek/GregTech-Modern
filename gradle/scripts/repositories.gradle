@@ -10,6 +10,7 @@ repositories {
             includeGroupAndSubgroups("io.netty")
             includeGroup("com.google.guava")
             includeGroup("io.netty")
+            includeGroupAndSubgroups("org.apache")
         }
     }
 

@@ -97,10 +97,10 @@ public class LayeredVeinGenerator extends VeinGenerator {
         int sectionZ0 = blockToSectionCoord(zMin), sectionZ1 = blockToSectionCoord(zMin + size);
 
         SectionPos.betweenClosedStream(sectionX0, sectionY0, sectionZ0, sectionX1, sectionY1, sectionZ1)
-                .forEach(sectionPos -> {
+                .forEach(pos -> {
                     final long randomSeed = random.nextLong(); // Fully deterministic regardless of chunk order
-                    generatedSections.put(sectionPos.asLong(), (access, section) -> {
-                        placeSection(level, access, section, sectionPos, randomSeed, entry, size,
+                    generatedSections.put(pos.asLong(), (worldGenLevel, access, section, sectionPos) -> {
+                        placeSection(worldGenLevel, access, section, sectionPos, randomSeed, entry, size,
                                 resolvedLayers, layerDiameterOffsets, layerCoordinate, slantyCoordinate, slope,
                                 xMin, yMin, zMin);
                     });
@@ -109,31 +109,35 @@ public class LayeredVeinGenerator extends VeinGenerator {
         return generatedSections;
     }
 
-    private static void resolveLayers(int diameter, GTLayerPattern layerPattern,
+    private static void resolveLayers(int size, GTLayerPattern layerPattern,
                                       List<GTLayerPattern.Layer> resolvedLayers, FloatList layerDiameterOffsets,
                                       int layerCoordinate, int slantyCoordinate, float slope, RandomSource random) {
-        int maxLayer = diameter;
+        // layers are resolved as if the vein is facing primarily up
+        int maxLayer = size;
         if (slantyCoordinate != layerCoordinate) {
-            maxLayer += Mth.floor(diameter * slope);
+            maxLayer += Mth.floor(size * slope);
         }
         while (maxLayer >= resolvedLayers.size()) {
-            GTLayerPattern.Layer next = layerPattern.rollNext(
-                    resolvedLayers.isEmpty() ? null : resolvedLayers.get(resolvedLayers.size() - 1),
-                    random);
+            GTLayerPattern.Layer previous = resolvedLayers.isEmpty() ? null :
+                    resolvedLayers.get(resolvedLayers.size() - 1);
+            GTLayerPattern.Layer next = layerPattern.rollNext(previous, random);
 
+            // value between 0.5 and 1.0
             float offset = random.nextFloat() * 0.5f + 0.5f;
-            // insert the previous layer if this one is null (e.g. invalid)
+
             if (next == null) {
-                if (resolvedLayers.isEmpty()) {
+                // insert the previous layer again if this one is null (e.g. invalid)
+                if (previous == null) {
                     continue;
                 }
-                resolvedLayers.add(resolvedLayers.get(resolvedLayers.size() - 1));
+                resolvedLayers.add(previous);
                 layerDiameterOffsets.add(offset);
-                continue;
-            }
-            for (int i = 0; i < next.minSize + random.nextInt(1 + next.maxSize - next.minSize); i++) {
-                resolvedLayers.add(next);
-                layerDiameterOffsets.add(offset);
+            } else {
+                int layerThickness = random.nextIntBetweenInclusive(next.minSize, next.maxSize);
+                for (int i = 0; i < layerThickness; i++) {
+                    resolvedLayers.add(next);
+                    layerDiameterOffsets.add(offset);
+                }
             }
         }
     }
@@ -146,36 +150,40 @@ public class LayeredVeinGenerator extends VeinGenerator {
         RandomSource random = new XoroshiroRandomSource(randomSeed);
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
+        // `1 / radius` -> `1 / (diameter / 2)` -> `2 / diameter`
+        float inverseRadius = 2f / size;
         for (int dx = 0; dx < size; dx++) {
             if (blockToSectionCoord(xMin + dx) != sectionPos.x()) continue;
 
-            float sizeFractionX = dx * 2f / size - 1;
-            float xSizeSqr = sizeFractionX * sizeFractionX;
-            if (xSizeSqr > 1) continue;
+            // `dx * (1 / radius)` -> `dx * (1 / (size / 2))` -> `dx * (2 / size)`
+            float xDistance = dx * inverseRadius - 1;
+            float xDistanceSqr = xDistance * xDistance;
+            if (xDistanceSqr > 1f) continue;
 
             for (int dy = 0; dy < size; dy++) {
                 if (blockToSectionCoord(yMin + dy) != sectionPos.y()) continue;
 
-                float sizeFractionY = dy * 2f / size - 1;
-                float ySizeSqr = sizeFractionY * sizeFractionY;
-                if (xSizeSqr + ySizeSqr > 1) continue;
+                float yDistance = dy * inverseRadius - 1;
+                float yDistanceSqr = yDistance * yDistance;
+                if ((xDistanceSqr + yDistanceSqr) > 1f) continue;
                 if (level.isOutsideBuildHeight(yMin + dy)) continue;
 
                 for (int dz = 0; dz < size; dz++) {
                     if (blockToSectionCoord(zMin + dz) != sectionPos.z()) continue;
 
-                    float sizeFractionZ = dz * 2f / size - 1;
-                    float zSizeSqr = sizeFractionZ * sizeFractionZ;
-                    // OPTIMIZATION: all values in layerDiameterOffsets are in the [0,1] range, so
-                    // check if the size is >1 before doing any of that math
-                    if (xSizeSqr + ySizeSqr + zSizeSqr > 1) continue;
+                    float zDistance = dz * inverseRadius - 1;
+                    float zDistanceSqr = zDistance * zDistance;
+                    float distanceSquared = xDistanceSqr + yDistanceSqr + zDistanceSqr;
+                    if (distanceSquared > 1f) continue;
 
-                    int layerIndex = size;
+                    // layerCoordinate is between 0 and 3, so this is weighted to favor making
+                    // veins that primarily face up
+                    int layerIndex = layerCoordinate == 0 ? dz : layerCoordinate == 1 ? dx : dy;
                     if (slantyCoordinate != layerCoordinate) {
-                        layerIndex += Mth.floor(size * slope);
+                        layerIndex += Mth.floor((slantyCoordinate == 0 ? dz : slantyCoordinate == 1 ? dx : dy) * slope);
                     }
 
-                    if (xSizeSqr + ySizeSqr + zSizeSqr > layerDiameterOffsets.getFloat(layerIndex)) continue;
+                    if (distanceSquared > layerDiameterOffsets.getFloat(layerIndex)) continue;
 
                     GTLayerPattern.Layer layer = resolvedLayers.get(layerIndex);
                     Either<List<OreConfiguration.TargetBlockState>, Material> state = layer.rollBlock(random);
