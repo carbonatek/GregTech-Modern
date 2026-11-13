@@ -110,7 +110,6 @@ import net.neoforged.neoforge.event.level.ChunkWatchEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
@@ -275,7 +274,6 @@ public class CommonEventListener {
     public static void worldUnload(LevelEvent.Unload event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
             TaskHandler.onWorldUnLoad(serverLevel);
-            // MultiblockWorldSavedData.getOrCreate(serverLevel).releaseExecutorService();
             ServerCache.instance.invalidateWorld(serverLevel);
         } else if (event.getLevel().isClientSide()) {
             ClientCacheManager.saveCaches(event.getLevel().registryAccess());
@@ -293,18 +291,6 @@ public class CommonEventListener {
     public static void serverStopped(ServerStoppedEvent event) {
         ServerCache.instance.clear();
         ReloadGuard.reset();
-    }
-
-    @SubscribeEvent
-    public static void serverStopping(ServerStoppingEvent event) {
-        /*
-         * var levels = event.getServer().getAllLevels();
-         * for (var level : levels) {
-         * if (!level.isClientSide()) {
-         * MultiblockWorldSavedData.getOrCreate(level).releaseExecutorService();
-         * }
-         * }
-         */
     }
 
     @SubscribeEvent
