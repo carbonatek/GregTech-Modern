@@ -1,7 +1,6 @@
 package com.gregtechceu.gtceu.api.data.worldgen.bedrockfluid;
 
 import com.gregtechceu.gtceu.api.GTValues;
-import com.gregtechceu.gtceu.api.data.worldgen.WorldGeneratorUtils;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
 import com.gregtechceu.gtceu.utils.GTMath;
 
@@ -105,7 +104,7 @@ public class BedrockFluidVeinSavedData extends SavedData {
                             fluidDefinition.getBiomeWeightModifier().applyAsInt(biome);
                     if (veinWeight > 0 && (fluidDefinition.getDimensionFilter().isEmpty() ||
                             fluidDefinition.getDimensionFilter().stream().anyMatch(
-                                    dim -> WorldGeneratorUtils.isSameDimension(dim, serverLevel.dimension())))) {
+                                    dim -> dim == serverLevel.dimension()))) {
                         weight -= veinWeight;
                         if (weight < 0) {
                             definition = holder;
@@ -148,7 +147,7 @@ public class BedrockFluidVeinSavedData extends SavedData {
                     continue;
                 }
                 if (definition.getDimensionFilter().isEmpty() || definition.getDimensionFilter().stream()
-                        .anyMatch(dim -> WorldGeneratorUtils.isSameDimension(dim, serverLevel.dimension()))) {
+                        .anyMatch(dim -> dim == serverLevel.dimension())) {
                     totalWeight += definition.getBiomeWeightModifier().applyAsInt(biome);
                     totalWeight += definition.getWeight();
                 }

@@ -6,8 +6,11 @@ import com.gregtechceu.gtceu.api.data.tag.TagPrefix;
 import com.gregtechceu.gtceu.api.data.worldgen.GTOreDefinition;
 import com.gregtechceu.gtceu.api.data.worldgen.ores.OreBlockPlacer;
 import com.gregtechceu.gtceu.api.registry.GTRegistries;
+import com.gregtechceu.gtceu.config.ConfigHolder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.state.BlockState;
@@ -19,6 +22,7 @@ import com.mojang.serialization.MapCodec;
 import dev.latvian.mods.rhino.util.HideFromJS;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ObjectIntPair;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,12 +31,34 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import static com.gregtechceu.gtceu.GTCEu.LOGGER;
+
 public abstract class VeinGenerator {
 
     public static final Codec<VeinGenerator> DIRECT_CODEC = GTRegistries.VEIN_GENERATORS.byNameCodec()
             .dispatch(VeinGenerator::type, VeinGeneratorType::codec);
 
     public VeinGenerator() {}
+
+    protected static void printBlockPlacementWarning(GTOreDefinition entry, String generatorName, SectionPos pos,
+                                                     Direction.Axis axis, int sectionRelativeCoordinate) {
+        int sectionMin = switch (axis) {
+            case X -> pos.minBlockX();
+            case Y -> pos.minBlockY();
+            case Z -> pos.minBlockZ();
+        };
+        int sectionMax = switch (axis) {
+            case X -> pos.maxBlockX();
+            case Y -> pos.maxBlockY();
+            case Z -> pos.maxBlockZ();
+        };
+        if (ConfigHolder.INSTANCE.dev.debugWorldgen) {
+            LOGGER.warn(
+                    "Tried to place block of {} vein '{}' in section ({}) outside section (at {}={}, section bounds: [{},{}])",
+                    generatorName, entry, pos.toShortString(), axis.getName(),
+                    sectionMin + sectionRelativeCoordinate, sectionMin, sectionMax);
+        }
+    }
 
     /**
      * @return List of [block|material, chance]
@@ -65,15 +91,15 @@ public abstract class VeinGenerator {
     }
 
     /**
-     * Generate a map of all ore placers (by block position), for each block in this ore vein.
+     * Generate a map of all ore placers (by section), for each section this ore vein should be placed in.
      *
      * <p>
      * Note that, if in any way possible, this is NOT supposed to directly place any of the vein's blocks, as their
      * respective ore placers are invoked at a later time, when the chunk containing them is actually generated.
      */
     @HideFromJS
-    public abstract Map<BlockPos, OreBlockPlacer> generate(WorldGenLevel level, RandomSource random,
-                                                           GTOreDefinition entry, BlockPos origin);
+    public abstract Long2ObjectMap<OreBlockPlacer> generate(WorldGenLevel level, RandomSource random,
+                                                            GTOreDefinition entry, BlockPos origin);
 
     @HideFromJS
     public abstract VeinGenerator build();
