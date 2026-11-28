@@ -1,10 +1,8 @@
 package com.gregtechceu.gtceu.api.data.worldgen.ores;
 
 import com.gregtechceu.gtceu.config.ConfigHolder;
-import com.gregtechceu.gtceu.core.mixins.BulkSectionAccessAccessor;
 
 import net.minecraft.core.SectionPos;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.chunk.BulkSectionAccess;
@@ -12,14 +10,11 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
-import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 
 import lombok.Getter;
 
-import java.util.List;
-
-import javax.annotation.Nullable;
+import java.util.stream.Stream;
 
 /**
  * Responsible for placing ores of surrounding veins for the current chunk.
@@ -44,35 +39,29 @@ public class OrePlacer {
         if (!ConfigHolder.INSTANCE.dev.doSuperflatOres && chunkGenerator instanceof FlatLevelSource) return;
 
         final ChunkPos chunkPos = chunk.getPos();
-        RandomSource random = new XoroshiroRandomSource(level.getSeed() ^ chunkPos.toLong());
-        List<GeneratedVein> generatedVeins = oreGenCache.consumeChunkVeins(level, chunkGenerator, chunk);
+        Stream<GeneratedVein> generatedVeins = oreGenCache.consumeChunkVeins(level, chunkGenerator, chunk);
 
         final int minSection = level.getMinSection(), maxSection = level.getMaxSection();
         try (BulkSectionAccess access = new BulkSectionAccess(level)) {
             generatedVeins.forEach(vein -> {
                 for (int y = minSection; y < maxSection; y++) {
                     long sectionPos = SectionPos.asLong(chunkPos.x, y, chunkPos.z);
-                    placeVein(sectionPos, random, level, access, vein, null);
+                    placeVein(sectionPos, level, access, vein, vein.getLayer().getTarget());
                 }
                 placeIndicators(level, chunkPos, access, vein);
             });
         }
     }
 
-    public void placeVein(long sectionPos, RandomSource random, WorldGenLevel level, BulkSectionAccess access,
-                          GeneratedVein generatedVein, @Nullable RuleTest targetOverride) {
-        LevelChunkSection section = getSection(level, access, sectionPos);
+    public void placeVein(long sectionPos, WorldGenLevel level, BulkSectionAccess access,
+                          GeneratedVein generatedVein, RuleTest layerTarget) {
+        // suboptimal but there's no overload that accepts a section pos
+        LevelChunkSection section = access.getSection(SectionPos.of(sectionPos).origin());
         if (section == null) return;
-
-        // TODO readd this check
-        RuleTest layerTarget = targetOverride != null ? targetOverride : generatedVein.getLayer().getTarget();
 
         OreBlockPlacer placer = generatedVein.consumeOres(sectionPos);
         if (placer == null) return;
-
-        // if (layerTarget.test(blockState, random)) {
-        placer.placeSectionBlocks(level, access, section, SectionPos.of(sectionPos));
-        // }
+        placer.placeSectionBlocks(level, access, section, layerTarget, SectionPos.of(sectionPos));
     }
 
     private void placeIndicators(WorldGenLevel level, ChunkPos chunkPos, BulkSectionAccess access,
@@ -83,28 +72,5 @@ public class OrePlacer {
         if (placer == null) return;
 
         placer.placeIndicators(access, level);
-    }
-
-    @Nullable
-    private static LevelChunkSection getSection(WorldGenLevel level, BulkSectionAccess _access, long packedSectionPos) {
-        BulkSectionAccessAccessor access = (BulkSectionAccessAccessor) _access;
-        int idx = level.getSectionIndexFromSectionY(SectionPos.y(packedSectionPos));
-        if (idx < 0 || idx >= level.getSectionsCount()) {
-            return null;
-        }
-
-        LevelChunkSection lastSection = access.getLastSection();
-        if (lastSection == null || access.getLastSectionKey() != packedSectionPos) {
-            lastSection = access.getAcquiredSections().computeIfAbsent(packedSectionPos, (pos) -> {
-                ChunkAccess chunk = level.getChunk(SectionPos.x(pos), SectionPos.z(pos));
-                LevelChunkSection section = chunk.getSection(idx);
-                section.acquire();
-                return section;
-            });
-            access.setLastSection(lastSection);
-            access.setLastSectionKey(packedSectionPos);
-        }
-
-        return lastSection;
     }
 }

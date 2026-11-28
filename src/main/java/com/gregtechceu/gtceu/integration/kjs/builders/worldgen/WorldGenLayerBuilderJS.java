@@ -12,7 +12,9 @@ import dev.latvian.mods.kubejs.registry.BuilderBase;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.experimental.Accessors;
 
+import java.util.*;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -20,7 +22,7 @@ import java.util.Set;
 public class WorldGenLayerBuilderJS extends BuilderBase<IWorldGenLayer> {
 
     public transient List<IWorldGenLayer.RuleTestSupplier> targets = new ObjectArrayList<>();
-    public transient List<ResourceKey<Level>> dimensions = new ObjectArrayList<>();
+    public transient Set<ResourceKey<Level>> dimensions = new LinkedHashSet<>();
 
     public WorldGenLayerBuilderJS(ResourceLocation id) {
         super(id);

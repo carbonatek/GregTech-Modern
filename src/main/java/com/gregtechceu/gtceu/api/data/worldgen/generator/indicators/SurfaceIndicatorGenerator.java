@@ -114,8 +114,9 @@ public class SurfaceIndicatorGenerator extends IndicatorGenerator {
     }
 
     private static void validateSurfaceRockMaterial(Material material) {
-        if (GTMaterialBlocks.SURFACE_ROCK_BLOCKS.get(material) == null)
+        if (GTMaterialBlocks.SURFACE_ROCK_BLOCKS.get(material) == null) {
             throw new IllegalArgumentException("No surface rock registered for material " + material.getName());
+        }
     }
 
     @Override
@@ -132,9 +133,9 @@ public class SurfaceIndicatorGenerator extends IndicatorGenerator {
                 center.getX() - radius, center.getY(), center.getZ() - radius,
                 center.getX() + radius, center.getY(), center.getZ() + radius).map(BlockPos::immutable);
 
-        var positions = positionStream
+        List<BlockPos> positions = positionStream
                 .filter(pos -> pos.equals(center) || random.nextFloat() <= density)
-                .filter(pos -> Math.sqrt(pos.distSqr(center)) <= radius)
+                .filter(pos -> pos.distSqr(center) <= (radius * radius))
                 .toList();
 
         return WorldGeneratorUtils.groupByChunks(positions).entrySet().stream()
@@ -145,12 +146,9 @@ public class SurfaceIndicatorGenerator extends IndicatorGenerator {
     private OreIndicatorPlacer createPlacer(List<BlockPos> positionsWithoutY,
                                             BlockState blockState) {
         return (access, level) -> {
-            var positions = positionsWithoutY.stream()
-                    .map(pos -> placement.resolver.apply(level, access, pos))
-                    .filter(pos -> !level.isOutsideBuildHeight(pos))
-                    .toList();
-
-            for (BlockPos pos : positions) {
+            for (BlockPos pos : positionsWithoutY) {
+                pos = placement.resolver.apply(level, access, pos);
+                if (level.isOutsideBuildHeight(pos)) continue;
                 // This is necessary because the heightmap can't be determined at the time of creating the placers
                 var section = Objects.requireNonNull(access.getSection(pos));
 
@@ -188,31 +186,36 @@ public class SurfaceIndicatorGenerator extends IndicatorGenerator {
     @AllArgsConstructor
     public enum IndicatorPlacement implements StringRepresentable {
 
-        SURFACE(
-                (level, access, pos) -> pos.atY(Math.max(
-                        level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, pos.getX(), pos.getZ()),
-                        pos.getY())),
-                block -> getBlockState(block, Direction.DOWN)),
+        SURFACE((level, access, pos) -> {
+            return pos.atY(Math.max(
+                    level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, pos.getX(), pos.getZ()),
+                    pos.getY()));
+        }, block -> getBlockState(block, Direction.DOWN)),
+        ABOVE((level, access, initialPos) -> {
+            return WorldGeneratorUtils.findBlockPos(
+                    initialPos,
+                    pos -> {
+                        return access.getBlockState(pos).isAir() &&
+                                access.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP);
+                    },
+                    pos -> pos.move(Direction.UP, 1),
+                    level.getMaxBuildHeight() - initialPos.getY()).orElse(initialPos);
+        }, block -> getBlockState(block, Direction.DOWN)),
+        BELOW((level, access, initialPos) -> {
+            return WorldGeneratorUtils.findBlockPos(
+                    initialPos,
+                    pos -> {
+                        return access.getBlockState(pos).isAir() &&
+                                access.getBlockState(pos.above()).isFaceSturdy(level, pos.above(), Direction.DOWN);
+                    },
+                    pos -> pos.move(Direction.DOWN, 1),
+                    initialPos.getY() - level.getMinBuildHeight())
+                    .orElse(initialPos);
+        }, block -> getBlockState(block, Direction.UP));
 
-        ABOVE(
-                (level, access, initialPos) -> WorldGeneratorUtils.findBlockPos(
-                        initialPos,
-                        pos -> access.getBlockState(pos).isAir() &&
-                                access.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP),
-                        pos -> pos.move(Direction.UP, 1),
-                        level.getMaxBuildHeight() - initialPos.getY()).orElse(initialPos),
-                block -> getBlockState(block, Direction.DOWN)),
-
-        BELOW(
-                (level, access, initialPos) -> WorldGeneratorUtils.findBlockPos(
-                        initialPos,
-                        pos -> access.getBlockState(pos).isAir() &&
-                                access.getBlockState(pos.above()).isFaceSturdy(level, pos.above(), Direction.DOWN),
-                        pos -> pos.move(Direction.DOWN, 1),
-                        initialPos.getY() - level.getMinBuildHeight()).orElse(initialPos),
-                block -> getBlockState(block, Direction.UP));
-
-        public static final Codec<IndicatorPlacement> CODEC = StringRepresentable.fromEnum(IndicatorPlacement::values);
+        @SuppressWarnings("deprecation")
+        public static final StringRepresentable.EnumCodec<IndicatorPlacement> CODEC = StringRepresentable
+                .fromEnum(IndicatorPlacement::values);
 
         public final TriFunction<WorldGenLevel, BulkSectionAccess, BlockPos, BlockPos> resolver;
         public final Function<Either<BlockState, Material>, BlockState> stateTransformer;
@@ -230,7 +233,7 @@ public class SurfaceIndicatorGenerator extends IndicatorGenerator {
         }
 
         public static IndicatorPlacement getByName(String name) {
-            return IndicatorPlacement.valueOf(name.toUpperCase(Locale.ROOT));
+            return CODEC.byName(name);
         }
     }
 }

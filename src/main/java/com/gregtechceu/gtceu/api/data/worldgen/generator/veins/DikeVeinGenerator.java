@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
 import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration.TargetBlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.AlwaysTrueTest;
+import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
 
 import com.mojang.datafixers.util.Either;
@@ -89,8 +90,8 @@ public class DikeVeinGenerator extends VeinGenerator {
                 sectionX + radius, blockToSectionCoord(maxYLevel), sectionZ + radius)
                 .forEach(pos -> {
                     final long randomSeed = random.nextLong(); // Fully deterministic regardless of chunk order
-                    generatedSections.put(pos.asLong(), (worldGenLevel, access, section, sectionPos) -> {
-                        placeSection(access, section, sectionPos, randomSeed, entry, normalNoise, radius,
+                    generatedSections.put(pos.asLong(), (worldGenLevel, access, section, layerTarget, sectionPos) -> {
+                        placeSection(access, section, layerTarget, sectionPos, randomSeed, entry, normalNoise, radius,
                                 xPos, zPos);
                     });
                 });
@@ -98,9 +99,9 @@ public class DikeVeinGenerator extends VeinGenerator {
         return generatedSections;
     }
 
-    private void placeSection(BulkSectionAccess access, LevelChunkSection section, SectionPos sectionPos,
-                              long randomSeed, GTOreDefinition entry, NormalNoise normalNoise, int radius,
-                              int globalX, int globalZ) {
+    private void placeSection(BulkSectionAccess access, LevelChunkSection section, RuleTest layerTarget,
+                              SectionPos sectionPos, long randomSeed, GTOreDefinition entry, NormalNoise normalNoise,
+                              int radius, int globalX, int globalZ) {
         RandomSource random = new XoroshiroRandomSource(randomSeed);
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
@@ -108,7 +109,7 @@ public class DikeVeinGenerator extends VeinGenerator {
         int sectionMaxY = Mth.clamp(maxYLevel, sectionPos.minBlockY(), sectionPos.maxBlockY());
 
         for (int dy = sectionMinY; dy <= sectionMaxY; dy++) {
-            // the Y coordinate is clamped to valid values only
+            // the Y coordinate is already clamped to valid values only
 
             for (int dx = -radius; dx <= radius; dx++) {
                 int inSectionX = globalX + dx - sectionPos.minBlockX();
@@ -122,20 +123,20 @@ public class DikeVeinGenerator extends VeinGenerator {
                     if (dist > (2f * radius)) continue;
                     pos.set(globalX + dx, dy, globalZ + dz);
                     if (normalNoise.getValue(dx, dy, dz) >= 0.5 && random.nextFloat() <= entry.density()) {
-                        placeBlock(access, section, random, pos, entry);
+                        placeBlock(access, section, layerTarget, random, pos, entry);
                     }
                 }
             }
         }
     }
 
-    private void placeBlock(BulkSectionAccess access, LevelChunkSection section, RandomSource random, BlockPos pos,
-                            GTOreDefinition entry) {
+    private void placeBlock(BulkSectionAccess access, LevelChunkSection section, RuleTest layerTarget,
+                            RandomSource random, BlockPos pos, GTOreDefinition entry) {
         DikeBlockDefinition blockDefinition = GTUtil.getRandomItem(random, this.blocks);
         if (blockDefinition == null) return;
         if (pos.getY() < blockDefinition.minY() || pos.getY() > blockDefinition.maxY()) return;
 
-        OreVeinUtil.placeOreBlock(blockDefinition.block, access, section, random, entry, pos);
+        OreVeinUtil.placeOreBlock(blockDefinition.block, access, section, layerTarget, random, entry, pos);
     }
 
     @Override

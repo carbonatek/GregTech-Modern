@@ -48,7 +48,6 @@
         "BlockMixin",
         "BlockPropertiesAccessor",
         "BlockStateAccessor",
-        "BulkSectionAccessAccessor",
         "ChunkGeneratorMixin",
         "EntityMixin",
         "FluidStackAccessor",

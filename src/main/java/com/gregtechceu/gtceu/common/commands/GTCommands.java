@@ -29,6 +29,7 @@ import net.minecraft.world.level.chunk.BulkSectionAccess;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.structure.templatesystem.AlwaysTrueTest;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -300,7 +301,7 @@ public class GTCommands {
         OreGenerator generator = placer.getOreGenCache().getOreGenerator();
 
         GeneratedVeinMetadata metadata = new GeneratedVeinMetadata(chunkPos, sourcePos, vein);
-        RandomSource random = level.random;
+        RandomSource random = new XoroshiroRandomSource(level.getSeed() ^ chunkPos.toLong());
 
         try (BulkSectionAccess access = new BulkSectionAccess(level)) {
             var generated = generator.generateOres(new OreGenerator.VeinConfiguration(metadata, random), level,
@@ -309,7 +310,7 @@ public class GTCommands {
                 throw VEIN_PLACE_FAILURE.create(id.toString(), sourcePos.toString());
             }
             for (long sectionPos : generated.get().getGeneratedSections()) {
-                placer.placeVein(sectionPos, random, level, access, generated.get(), AlwaysTrueTest.INSTANCE);
+                placer.placeVein(sectionPos, level, access, generated.get(), AlwaysTrueTest.INSTANCE);
                 ChunkAccess chunk = level.getChunk(SectionPos.x(sectionPos), SectionPos.z(sectionPos), ChunkStatus.FULL,
                         false);
                 if (chunk != null) {

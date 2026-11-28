@@ -295,7 +295,7 @@ public class GTOreDefinition {
             VeinGenerator.VeinGeneratorType<?> type = GTRegistries.VEIN_GENERATORS.get(id);
             veinGenerator = type == null ? null : type.defaultInstance().get();
         }
-        return veinGenerator;
+        return this.veinGenerator;
     }
 
     public GTOreDefinition surfaceIndicatorGenerator(Consumer<SurfaceIndicatorGenerator> config) {
@@ -306,16 +306,17 @@ public class GTOreDefinition {
     @SuppressWarnings("SameParameterValue")
     private <T extends IndicatorGenerator> T getOrCreateIndicatorGenerator(Class<T> indicatorClass,
                                                                            Supplier<T> constructor) {
-        var existingGenerator = indicatorGenerators.stream()
+        var existingGenerator = this.indicatorGenerators.stream()
                 .filter(indicatorClass::isInstance)
                 .map(indicatorClass::cast)
-                .findFirst().orElse(null);
+                .findFirst();
 
-        if (existingGenerator != null)
-            return existingGenerator;
+        if (existingGenerator.isPresent()) {
+            return existingGenerator.get();
+        }
 
-        var generator = constructor.get();
-        indicatorGenerators.add(generator);
+        T generator = constructor.get();
+        this.indicatorGenerators.add(generator);
         return generator;
     }
 

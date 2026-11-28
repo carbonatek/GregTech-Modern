@@ -6,18 +6,35 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.templatesystem.AlwaysTrueTest;
 import net.minecraft.world.level.levelgen.structure.templatesystem.RuleTest;
 
+import org.jetbrains.annotations.ApiStatus;
+
 import java.util.Set;
+import java.util.function.Supplier;
 
 public interface IWorldGenLayer extends StringRepresentable {
 
-    boolean isApplicableForLevel(ResourceKey<Level> level);
+    @ApiStatus.OverrideOnly
+    default boolean existsInDimension(ResourceKey<Level> level) {
+        return isApplicableForLevel(level.location());
+    }
+
+    /**
+     * @deprecated override {@link #existsInDimension(ResourceKey)} instead
+     */
+    @Deprecated(forRemoval = true)
+    @ApiStatus.ScheduledForRemoval(inVersion = "9.0.0")
+    @ApiStatus.OverrideOnly
+    default boolean isApplicableForLevel(ResourceKey<Level> level) {
+        return false;
+    }
 
     Set<ResourceKey<Level>> getLevels();
 
+    @ApiStatus.OverrideOnly
     RuleTest getTarget();
 
     @FunctionalInterface
-    interface RuleTestSupplier {
+    interface RuleTestSupplier extends Supplier<RuleTest> {
 
         RuleTest get();
     }
@@ -25,7 +42,7 @@ public interface IWorldGenLayer extends StringRepresentable {
     IWorldGenLayer NOWHERE = new IWorldGenLayer() {
 
         @Override
-        public boolean isApplicableForLevel(ResourceKey<Level> level) {
+        public boolean existsInDimension(ResourceKey<Level> level) {
             return false;
         }
 

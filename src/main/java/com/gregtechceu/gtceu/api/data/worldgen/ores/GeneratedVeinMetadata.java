@@ -29,6 +29,7 @@ public final class GeneratedVeinMetadata {
     @Getter
     @NotNull
     private final ChunkPos originChunk;
+    // TODO rename to `origin` (needs a datafixer for the NBT)
     @Getter
     @NotNull
     private final BlockPos center;
@@ -55,16 +56,18 @@ public final class GeneratedVeinMetadata {
     }
 
     public static GeneratedVeinMetadata readFromPacket(RegistryFriendlyByteBuf buf) {
-        ChunkPos origin = new ChunkPos(buf.readVarLong());
-        BlockPos center = BlockPos.of(buf.readVarLong());
+        ChunkPos originChunk = buf.readChunkPos();
+        BlockPos origin = buf.readBlockPos();
         Holder<GTOreDefinition> def = GTOreDefinition.STREAM_CODEC.decode(buf);
-        return new GeneratedVeinMetadata(origin, center, def, false);
+        boolean depleted = buf.readBoolean();
+        return new GeneratedVeinMetadata(originChunk, origin, def, depleted);
     }
 
     public void writeToPacket(RegistryFriendlyByteBuf buf) {
-        buf.writeVarLong(this.originChunk.toLong());
-        buf.writeVarLong(this.center.asLong());
+        buf.writeChunkPos(this.originChunk);
+        buf.writeBlockPos(this.center);
         GTOreDefinition.STREAM_CODEC.encode(buf, this.definition);
+        buf.writeBoolean(this.depleted);
     }
 
     @Override
@@ -73,14 +76,15 @@ public final class GeneratedVeinMetadata {
         if (!(object instanceof GeneratedVeinMetadata that)) return false;
 
         return originChunk.equals(that.originChunk) && center.equals(that.center) &&
-                definition == that.definition;
+                definition == that.definition && this.depleted == that.depleted;
     }
 
     @Override
     public int hashCode() {
-        int result = originChunk.hashCode();
-        result = 31 * result + center.hashCode();
-        result = 31 * result + definition.hashCode();
+        int result = this.originChunk.hashCode();
+        result = 31 * result + this.center.hashCode();
+        result = 31 * result + this.definition.hashCode();
+        result = 31 * result + Boolean.hashCode(this.depleted);
         return result;
     }
 }

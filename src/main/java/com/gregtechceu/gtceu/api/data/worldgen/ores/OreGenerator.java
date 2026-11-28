@@ -18,14 +18,20 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomSupport;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
-import net.minecraft.world.level.levelgen.placement.PlacementContext;
+import net.minecraft.world.level.levelgen.placement.*;
 
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -33,6 +39,12 @@ import java.util.stream.Stream;
  * This does not actually place any of the ore's blocks, and delegates to the applicable vein generator.
  */
 public class OreGenerator {
+
+    public static final PlacementModifier GENERATION_ATTEMPTS = CountPlacement.of(8);
+    private static final LoadingCache<Integer, PlacementModifier> BELOW_SURFACE_FILTER_CACHE = CacheBuilder.newBuilder()
+            .expireAfterAccess(30, TimeUnit.SECONDS)
+            .softValues()
+            .build(CacheLoader.from(OreGenerator::createBelowSurfaceFilter));
 
     public record VeinConfiguration(GeneratedVeinMetadata data, RandomSource random) {
 
@@ -43,9 +55,9 @@ public class OreGenerator {
 
     public List<GeneratedVeinMetadata> generateMetadata(final WorldGenLevel level, ChunkGenerator chunkGenerator,
                                                         ChunkPos chunkPos) {
-        return createConfigs(level, chunkGenerator, chunkPos).stream()
-                .map(OreGenerator::logVeinGeneration)
+        return createConfigs(level, chunkGenerator, chunkPos)
                 .map(entry -> entry.data)
+                .peek(OreGenerator::logVeinGeneration)
                 .peek(data -> {
                     int gridX = Math.floorDiv(chunkPos.x, ConfigHolder.INSTANCE.worldgen.oreVeins.oreVeinGridSize);
                     int gridZ = Math.floorDiv(chunkPos.z, ConfigHolder.INSTANCE.worldgen.oreVeins.oreVeinGridSize);
@@ -81,6 +93,7 @@ public class OreGenerator {
         Long2ObjectMap<OreBlockPlacer> oresBySection = definition.veinGenerator()
                 .generate(level, config.forkRandom(), definition, config.data.center());
 
+        // TODO figure out a way to skip completely empty veins again
         if (oresBySection.isEmpty()) {
             logEmptyVein(config);
             return Optional.empty();
@@ -102,8 +115,8 @@ public class OreGenerator {
         return Optional.of(new GeneratedVein(chunkPos, definition.layer(), oresBySection, generatedIndicators));
     }
 
-    private List<VeinConfiguration> createConfigs(WorldGenLevel level, ChunkGenerator generator, ChunkPos chunkPos) {
-        var random = new XoroshiroRandomSource(level.getSeed() ^ chunkPos.toLong());
+    private Stream<VeinConfiguration> createConfigs(WorldGenLevel level, ChunkGenerator generator, ChunkPos chunkPos) {
+        RandomSource random = new XoroshiroRandomSource(level.getSeed() ^ chunkPos.toLong());
 
         return OreVeinUtil.getVeinCenter(chunkPos, random).stream()
                 .flatMap(veinCenter -> getEntries(level, veinCenter, random).map(entry -> {
@@ -114,13 +127,13 @@ public class OreGenerator {
                                     "Cannot determine y coordinate for the vein at " + veinCenter));
 
                     return new VeinConfiguration(new GeneratedVeinMetadata(chunkPos, origin, entry), random);
-                })).toList();
+                }));
     }
 
     private Stream<Holder<GTOreDefinition>> getEntries(WorldGenLevel level, BlockPos veinCenter,
-                                                       XoroshiroRandomSource random) {
+                                                       RandomSource random) {
         return level.registryAccess().registryOrThrow(GTRegistries.Keys.WORLD_GEN_LAYER).stream()
-                .filter(layer -> layer.isApplicableForLevel(level.getLevel().dimension()))
+                .filter(layer -> layer.existsInDimension(level.getLevel().dimension()))
                 .map(layer -> {
                     int quartX = QuartPos.fromBlock(veinCenter.getX());
                     int quartY = QuartPos.fromBlock(veinCenter.getY());
@@ -133,7 +146,7 @@ public class OreGenerator {
     private @Nullable Holder<GTOreDefinition> getEntry(WorldGenLevel level, Holder<Biome> biome, RandomSource random,
                                                        IWorldGenLayer layer) {
         var veins = WorldGeneratorUtils.getCachedBiomeVeins(level.getLevel(), biome).stream()
-                .filter(vein -> vein.vein().value().layer().equals(layer))
+                .filter(entry -> entry.vein().value().layer().equals(layer))
                 .toList();
         var randomVein = GTUtil.getRandomItem(random, veins);
         return randomVein == null ? null : randomVein.vein();
@@ -145,13 +158,27 @@ public class OreGenerator {
         String layerName = level.getLevel().registryAccess().registryOrThrow(GTRegistries.Keys.WORLD_GEN_LAYER)
                 .getKey(entry.layer()).toString();
         RandomSupport.Seed128bit layerSeed = RandomSupport.seedFromHashOf(layerName);
-
-        RandomSource layeredRandom = new XoroshiroRandomSource(random.nextLong() ^ layerSeed.seedLo(),
-                random.nextLong() ^ layerSeed.seedHi());
+        RandomSupport.Seed128bit actualSeed = layerSeed.xor(random.nextLong(), random.nextLong());
+        RandomSource layeredRandom = new XoroshiroRandomSource(actualSeed);
 
         veinCenter = OreVeinUtil.getVeinCenter(pos, layeredRandom).orElse(veinCenter);
+
+        // maximum depth at which there will for sure be a block to place
+        int maxDepth = entry.clusterSize().getMinValue();
+        PlacementModifier _belowSurface;
+        try {
+            _belowSurface = BELOW_SURFACE_FILTER_CACHE.get(maxDepth);
+        } catch (ExecutionException e) {
+            GTCEu.LOGGER.error("Cannot cache depth filter for depth {}", maxDepth, e);
+            _belowSurface = createBelowSurfaceFilter(maxDepth);
+        }
+        final PlacementModifier belowSurface = _belowSurface;
+
         PlacementContext placementContext = new PlacementContext(level, generator, Optional.empty());
-        return entry.heightRange().getPositions(placementContext, layeredRandom, veinCenter)
+        return Stream.of(veinCenter)
+                .flatMap(p -> GENERATION_ATTEMPTS.getPositions(placementContext, layeredRandom, p))
+                .flatMap(p -> entry.heightRange().getPositions(placementContext, layeredRandom, p))
+                .flatMap(p -> belowSurface.getPositions(placementContext, layeredRandom, p))
                 .findFirst();
     }
 
@@ -159,13 +186,11 @@ public class OreGenerator {
     // ********* LOGGING ********* //
     // /////////////////////////// //
 
-    private static VeinConfiguration logVeinGeneration(VeinConfiguration config) {
-        if (ConfigHolder.INSTANCE.dev.debugWorldgen && config.data.definition().getKey() != null) {
-            GTCEu.LOGGER.debug("Generating vein {} at {}", config.data.definition().getKey().location(),
-                    config.data.center());
+    private static void logVeinGeneration(GeneratedVeinMetadata data) {
+        if (ConfigHolder.INSTANCE.dev.debugWorldgen && data.definition().getKey() != null) {
+            GTCEu.LOGGER.debug("Generating vein {} at {}", data.definition().getKey().location(),
+                    data.center());
         }
-
-        return config;
     }
 
     private static void logEmptyVein(VeinConfiguration config) {
@@ -173,5 +198,9 @@ public class OreGenerator {
             GTCEu.LOGGER.debug("No blocks generated for vein {} at {}", config.data.definition().getKey().location(),
                     config.data.center());
         }
+    }
+
+    private static PlacementModifier createBelowSurfaceFilter(int maxDepth) {
+        return SurfaceRelativeThresholdFilter.of(Heightmap.Types.WORLD_SURFACE_WG, Integer.MIN_VALUE, maxDepth);
     }
 }
