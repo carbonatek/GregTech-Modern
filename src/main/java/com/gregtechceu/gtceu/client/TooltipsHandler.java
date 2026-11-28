@@ -4,7 +4,6 @@ import com.gregtechceu.gtceu.GTCEu;
 import com.gregtechceu.gtceu.api.GTValues;
 import com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper;
 import com.gregtechceu.gtceu.api.data.chemical.material.Material;
-import com.gregtechceu.gtceu.api.data.chemical.material.ReloadGuard;
 import com.gregtechceu.gtceu.api.data.chemical.material.properties.HazardProperty;
 import com.gregtechceu.gtceu.api.data.chemical.material.properties.PropertyKey;
 import com.gregtechceu.gtceu.api.data.chemical.material.stack.MaterialEntry;
@@ -46,10 +45,8 @@ public class TooltipsHandler {
 
     public static void appendTooltips(ItemStack stack, TooltipFlag flag, List<Component> tooltips,
                                       Item.TooltipContext context) {
-        boolean reloading = ReloadGuard.isReloading();
-
         // Formula
-        var materialEntry = reloading ? null : ChemicalHelper.getMaterialEntry(stack.getItem());
+        var materialEntry = ChemicalHelper.getMaterialEntry(stack.getItem());
         if (materialEntry != null) {
             var formula = materialEntry.material().getChemicalFormula();
             if (formula != null && !formula.isEmpty()) {
@@ -79,9 +76,6 @@ public class TooltipsHandler {
             }
         }
 
-        if (reloading) {
-            return;
-        }
         Either<Material, MaterialEntry> material = HazardProperty.getValidHazardMaterial(stack);
         if (material == null) {
             return;
@@ -103,7 +97,7 @@ public class TooltipsHandler {
             return;
         }
 
-        var material = ReloadGuard.isReloading() ? null : ChemicalHelper.getMaterial(fluid);
+        var material = ChemicalHelper.getMaterial(fluid);
         if (material != null) {
             if (material.requiresMetalFreezing() && fluid.isSame(material.getFluid(FluidStorageKeys.LIQUID))) {
                 tooltips.accept(Component.translatable("gtceu.fluid.requires_metal_freezing")

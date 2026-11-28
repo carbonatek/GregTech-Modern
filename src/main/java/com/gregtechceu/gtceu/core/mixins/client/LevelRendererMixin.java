@@ -4,7 +4,6 @@ import com.gregtechceu.gtceu.api.GTValues;
 import com.gregtechceu.gtceu.api.block.MaterialBlock;
 import com.gregtechceu.gtceu.api.block.MaterialPipeBlock;
 import com.gregtechceu.gtceu.api.data.chemical.ChemicalHelper;
-import com.gregtechceu.gtceu.api.data.chemical.material.ReloadGuard;
 import com.gregtechceu.gtceu.api.data.chemical.material.stack.MaterialEntry;
 import com.gregtechceu.gtceu.api.item.datacomponents.AoESymmetrical;
 import com.gregtechceu.gtceu.api.item.tool.ToolHelper;
@@ -185,8 +184,7 @@ public abstract class LevelRendererMixin {
         boolean renderColoredOutline = false;
 
         // spotless:off
-        MaterialEntry materialEntry = ReloadGuard.isReloading() ? null :
-                ChemicalHelper.getMaterialEntry(state.getBlock());
+        MaterialEntry materialEntry = ChemicalHelper.getMaterialEntry(state.getBlock());
         if (rendererCfg.coloredMaterialBlockOutline && materialEntry != null) {
             renderColoredOutline = true;
             rgb = materialEntry.material().getMaterialRGB();
